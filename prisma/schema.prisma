@@ -1,0 +1,297 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum Role {
+  ADMIN
+  MANAGER
+  COLLABORATEUR
+}
+
+enum StatutSupport {
+  BROUILLON
+  EN_VALIDATION
+  VALIDE
+  REFUSE
+}
+
+enum TypeSupport {
+  PRINT
+  WEB
+  VIDEO
+  SOCIAL
+  AUTRE
+}
+
+enum TypeAction {
+  CREATION
+  MODIFICATION
+  SUPPRESSION
+  UPLOAD_VERSION
+  DEMANDE_VALIDATION
+  VALIDATION
+  REFUS
+  COMMENTAIRE
+  INVITATION_ENVOYEE
+  INVITATION_ACCEPTEE
+}
+
+enum StatutInvitation {
+  EN_ATTENTE
+  ACCEPTEE
+  EXPIREE
+  ANNULEE
+}
+
+// ============================================================================
+// ENTREPRISE (Tenant)
+// ============================================================================
+
+model Entreprise {
+  id        String   @id @default(cuid())
+  nom       String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users             User[]
+  projets           Projet[]
+  invitations       Invitation[]
+  historiqueActions HistoriqueAction[]
+
+  @@map("entreprises")
+}
+
+// ============================================================================
+// USER
+// ============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  nom          String
+  prenom       String
+  role         Role     @default(COLLABORATEUR)
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Tenant
+  entrepriseId String
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+
+  // Relations
+  membresProjet       MembreProjet[]
+  supportsCreated     Support[]          @relation("SupportCreateur")
+  fichiers            Fichier[]
+  commentaires        Commentaire[]
+  historiqueActions   HistoriqueAction[]
+  invitationsEnvoyees Invitation[]       @relation("InvitationEnvoyeur")
+
+  @@index([entrepriseId])
+  @@map("users")
+}
+
+// ============================================================================
+// PROJET
+// ============================================================================
+
+model Projet {
+  id          String   @id @default(cuid())
+  nom         String
+  description String?  @db.Text
+  slug        String
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Tenant
+  entrepriseId String
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+
+  // Relations
+  membres     MembreProjet[]
+  supports    Support[]
+  invitations Invitation[]
+
+  @@unique([entrepriseId, slug])
+  @@index([entrepriseId])
+  @@map("projets")
+}
+
+// ============================================================================
+// MEMBRE PROJET (User <-> Projet avec rôle)
+// ============================================================================
+
+model MembreProjet {
+  id        String   @id @default(cuid())
+  role      Role     @default(COLLABORATEUR)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  projetId String
+  projet   Projet @relation(fields: [projetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projetId])
+  @@index([projetId])
+  @@map("membres_projet")
+}
+
+// ============================================================================
+// SUPPORT
+// ============================================================================
+
+model Support {
+  id          String        @id @default(cuid())
+  nom         String
+  description String?       @db.Text
+  statut      StatutSupport @default(BROUILLON)
+  type        TypeSupport   @default(AUTRE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Tenant (dénormalisé pour queries rapides)
+  entrepriseId String
+
+  // Relations
+  projetId String
+  projet   Projet @relation(fields: [projetId], references: [id], onDelete: Cascade)
+
+  createurId String
+  createur   User   @relation("SupportCreateur", fields: [createurId], references: [id])
+
+  fichiers     Fichier[]
+  commentaires Commentaire[]
+
+  @@index([projetId])
+  @@index([entrepriseId])
+  @@index([statut])
+  @@map("supports")
+}
+
+// ============================================================================
+// FICHIER (Version d'un support)
+// ============================================================================
+
+model Fichier {
+  id             String   @id @default(cuid())
+  nomOriginal    String
+  nomStocke      String
+  mimeType       String
+  taille         Int // en bytes
+  version        Int      @default(1)
+  cheminStockage String
+  createdAt      DateTime @default(now())
+
+  // Relations
+  supportId String
+  support   Support @relation(fields: [supportId], references: [id], onDelete: Cascade)
+
+  uploadeurId String
+  uploadeur   User   @relation(fields: [uploadeurId], references: [id])
+
+  @@index([supportId])
+  @@map("fichiers")
+}
+
+// ============================================================================
+// COMMENTAIRE
+// ============================================================================
+
+model Commentaire {
+  id        String   @id @default(cuid())
+  contenu   String   @db.Text
+  mentions  Json? // Array de userIds mentionnés
+  ancrage   Json? // { page?: number, x?: number, y?: number } pour PDF/images
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  supportId String
+  support   Support @relation(fields: [supportId], references: [id], onDelete: Cascade)
+
+  auteurId String
+  auteur   User   @relation(fields: [auteurId], references: [id])
+
+  // Réponse à un autre commentaire (optionnel)
+  parentId String?
+  parent   Commentaire?  @relation("CommentaireReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  reponses Commentaire[] @relation("CommentaireReplies")
+
+  @@index([supportId])
+  @@map("commentaires")
+}
+
+// ============================================================================
+// INVITATION
+// ============================================================================
+
+model Invitation {
+  id        String           @id @default(cuid())
+  email     String
+  token     String           @unique
+  role      Role             @default(COLLABORATEUR)
+  statut    StatutInvitation @default(EN_ATTENTE)
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+
+  // Tenant
+  entrepriseId String
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+
+  // Projet optionnel (invitation à un projet spécifique)
+  projetId String?
+  projet   Projet? @relation(fields: [projetId], references: [id], onDelete: Cascade)
+
+  // Qui a envoyé l'invitation
+  envoyeurId String
+  envoyeur   User   @relation("InvitationEnvoyeur", fields: [envoyeurId], references: [id])
+
+  @@index([entrepriseId])
+  @@index([token])
+  @@map("invitations")
+}
+
+// ============================================================================
+// HISTORIQUE ACTIONS (Audit Trail)
+// ============================================================================
+
+model HistoriqueAction {
+  id          String     @id @default(cuid())
+  type        TypeAction
+  description String?    @db.Text
+  metadata    Json? // Données additionnelles (ancien statut, nouveau statut, etc.)
+  createdAt   DateTime   @default(now())
+
+  // Tenant
+  entrepriseId String
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+
+  // Qui a fait l'action
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Entités concernées (optionnelles)
+  projetId      String?
+  supportId     String?
+  fichierId     String?
+  commentaireId String?
+
+  @@index([entrepriseId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("historique_actions")
+}
