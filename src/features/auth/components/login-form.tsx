@@ -87,7 +87,11 @@ export function LoginForm() {
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button 
+          type="submit" 
+          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 h-11 text-base" 
+          disabled={isLoading}
+        >
           {isLoading ? 'Connexion...' : 'Se connecter'}
         </Button>
       </form>
