@@ -1,4 +1,7 @@
 export { CreateProjetDialog } from './components/create-projet-dialog'
 export { ProjetCard } from './components/projet-card'
+export { AddProjectMemberDialog } from './components/AddProjectMemberDialog'
+export { ProjectMemberActions } from './components/ProjectMemberActions'
 export * from './actions'
+export * from './members-actions'
 export * from './schemas'
