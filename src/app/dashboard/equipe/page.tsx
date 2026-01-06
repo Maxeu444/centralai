@@ -118,7 +118,10 @@ export default async function EquipePage() {
             <CreateEquipeDialog />
           </ManagerOrAbove>
           <AdminOnly>
-            <InviteUserDialog projets={projets} />
+            <InviteUserDialog 
+              projets={projets} 
+              equipes={equipes.map(e => ({ id: e.id, nom: e.nom, couleur: e.couleur }))}
+            />
           </AdminOnly>
         </div>
       </div>

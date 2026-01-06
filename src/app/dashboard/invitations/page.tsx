@@ -43,6 +43,12 @@ export default async function InvitationsPage() {
     orderBy: { nom: 'asc' },
   })
 
+  const equipes = await prisma.equipe.findMany({
+    where: { entrepriseId: session.user.entrepriseId },
+    select: { id: true, nom: true, couleur: true },
+    orderBy: { nom: 'asc' },
+  })
+
   const now = new Date()
   const stats = {
     total: invitations.length,
@@ -93,7 +99,7 @@ export default async function InvitationsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Invitations</h1>
           <p className="text-gray-600">Gérez les invitations à rejoindre votre entreprise</p>
         </div>
-        <InviteUserDialog projets={projets} />
+        <InviteUserDialog projets={projets} equipes={equipes} />
       </div>
 
       {/* Stats */}

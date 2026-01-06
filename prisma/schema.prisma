@@ -62,6 +62,7 @@ model Entreprise {
   id        String   @id @default(cuid())
   nom       String
   slug      String   @unique
+  logoUrl   String?  // URL du logo de l'entreprise
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -18,6 +18,7 @@ const inviteUserSchema = z.object({
   email: z.string().email('Email invalide'),
   role: z.enum(['COLLABORATEUR', 'MANAGER', 'ADMIN']),
   projetId: z.string().cuid().optional(),
+  equipeId: z.string().cuid().optional(),
 })
 
 const updateUserRoleSchema = z.object({
@@ -68,9 +69,11 @@ export async function inviteUser(formData: FormData): Promise<ActionResult> {
       return { success: false, error: 'Permission refusée. Seul un Admin peut inviter des utilisateurs.' }
     }
 
-    // Gérer la valeur spéciale __none__ pour projetId
+    // Gérer la valeur spéciale __none__ pour projetId et equipeId
     const rawProjetId = formData.get('projetId')
     const projetId = rawProjetId && rawProjetId !== '__none__' ? rawProjetId : undefined
+    const rawEquipeId = formData.get('equipeId')
+    const equipeId = rawEquipeId && rawEquipeId !== '__none__' ? rawEquipeId : undefined
 
     const validated = inviteUserSchema.parse({
       prenom: formData.get('prenom'),
@@ -78,6 +81,7 @@ export async function inviteUser(formData: FormData): Promise<ActionResult> {
       email: formData.get('email'),
       role: formData.get('role'),
       projetId,
+      equipeId,
     })
 
     // Vérifier que l'email n'est pas déjà utilisé
@@ -99,10 +103,20 @@ export async function inviteUser(formData: FormData): Promise<ActionResult> {
       }
     }
 
-    // Récupérer les infos de l'entreprise pour l'email
+    // Vérifier l'équipe si spécifiée
+    if (validated.equipeId) {
+      const equipe = await prisma.equipe.findUnique({
+        where: { id: validated.equipeId },
+      })
+      if (!equipe || equipe.entrepriseId !== session.user.entrepriseId) {
+        return { success: false, error: 'Équipe invalide' }
+      }
+    }
+
+    // Récupérer les infos de l'entreprise pour l'email (avec logo)
     const entreprise = await prisma.entreprise.findUnique({
       where: { id: session.user.entrepriseId },
-      select: { nom: true },
+      select: { nom: true, logoUrl: true },
     })
 
     const token = generateInvitationToken()
@@ -147,6 +161,16 @@ export async function inviteUser(formData: FormData): Promise<ActionResult> {
         })
       }
 
+      // Ajouter à l'équipe si spécifiée
+      if (validated.equipeId) {
+        await tx.membreEquipe.create({
+          data: {
+            userId: newUser.id,
+            equipeId: validated.equipeId,
+          },
+        })
+      }
+
       await tx.historiqueAction.create({
         data: {
           type: 'MEMBRE_AJOUTE',
@@ -162,6 +186,7 @@ export async function inviteUser(formData: FormData): Promise<ActionResult> {
       email: validated.email,
       inviterName: `${session.user.prenom} ${session.user.nom}`,
       entrepriseName: entreprise?.nom || 'votre entreprise',
+      entrepriseLogoUrl: entreprise?.logoUrl,
       role: validated.role,
       token,
       expiresAt,
@@ -291,12 +316,44 @@ export async function deleteUser(formData: FormData): Promise<ActionResult> {
       return { success: false, error: 'Impossible de supprimer un autre administrateur' }
     }
 
-    // Supprimer l'utilisateur
+    // Supprimer l'utilisateur et ses données associées
     await prisma.$transaction(async (tx) => {
+      // Supprimer les commentaires de l'utilisateur
+      await tx.commentaire.deleteMany({
+        where: { auteurId: validated.userId },
+      })
+
+      // Supprimer les fichiers uploadés
+      await tx.fichier.deleteMany({
+        where: { uploadeurId: validated.userId },
+      })
+
+      // Supprimer les membres d'équipe
+      await tx.membreEquipe.deleteMany({
+        where: { userId: validated.userId },
+      })
+
+      // Supprimer les membres de projet
+      await tx.membreProjet.deleteMany({
+        where: { userId: validated.userId },
+      })
+
+      // Supprimer les invitations envoyées
+      await tx.invitation.deleteMany({
+        where: { envoyeurId: validated.userId },
+      })
+
+      // Supprimer l'historique des actions de l'utilisateur
+      await tx.historiqueAction.deleteMany({
+        where: { userId: validated.userId },
+      })
+
+      // Supprimer l'utilisateur
       await tx.user.delete({
         where: { id: validated.userId },
       })
 
+      // Créer l'entrée d'historique avec l'admin qui a fait la suppression
       await tx.historiqueAction.create({
         data: {
           type: 'SUPPRESSION',
@@ -391,10 +448,10 @@ export async function resendInvitation(formData: FormData): Promise<ActionResult
       return { success: false, error: 'Invitation non trouvée' }
     }
 
-    // Récupérer les infos de l'entreprise pour l'email
+    // Récupérer les infos de l'entreprise pour l'email (avec logo)
     const entreprise = await prisma.entreprise.findUnique({
       where: { id: session.user.entrepriseId },
-      select: { nom: true },
+      select: { nom: true, logoUrl: true },
     })
 
     const token = generateInvitationToken()
@@ -425,6 +482,7 @@ export async function resendInvitation(formData: FormData): Promise<ActionResult
       email: invitation.email,
       inviterName: `${session.user.prenom} ${session.user.nom}`,
       entrepriseName: entreprise?.nom || 'votre entreprise',
+      entrepriseLogoUrl: entreprise?.logoUrl,
       role: invitation.role,
       token,
       expiresAt,

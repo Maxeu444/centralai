@@ -18,6 +18,7 @@ interface InvitationEmailData {
   email: string
   inviterName: string
   entrepriseName: string
+  entrepriseLogoUrl?: string | null
   role: string
   token: string
   expiresAt: Date
@@ -51,6 +52,16 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<bo
   const activateUrl = `${APP_URL}/activate?token=${data.token}`
   const roleName = formatRole(data.role)
   
+  // Construire l'URL du logo si disponible
+  const logoUrl = data.entrepriseLogoUrl 
+    ? `${APP_URL}${data.entrepriseLogoUrl}` 
+    : null
+  
+  // Header avec logo ou titre
+  const headerContent = logoUrl 
+    ? `<img src="${logoUrl}" alt="${data.entrepriseName}" style="max-height: 60px; max-width: 200px; object-fit: contain;" />`
+    : `<h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #18181b;">${data.entrepriseName}</h1>`
+  
   const html = `
 <!DOCTYPE html>
 <html lang="fr">
@@ -67,7 +78,7 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<bo
           <!-- Header -->
           <tr>
             <td style="padding: 40px 40px 20px; text-align: center; border-bottom: 1px solid #e4e4e7;">
-              <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #18181b;">${APP_NAME}</h1>
+              ${headerContent}
             </td>
           </tr>
           
@@ -79,11 +90,15 @@ export async function sendInvitationEmail(data: InvitationEmailData): Promise<bo
               </h2>
               
               <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #52525b;">
-                <strong>${data.inviterName}</strong> vous a ajouté à l'équipe sur ${APP_NAME} en tant que <strong>${roleName}</strong>.
+                <strong>${data.inviterName}</strong> vous a ajouté à l'équipe ${data.entrepriseName} sur ${APP_NAME} en tant que <strong>${roleName}</strong>.
               </p>
               
               <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #52525b;">
                 Votre compte a été créé. Cliquez sur le bouton ci-dessous pour <strong>définir votre mot de passe</strong> et accéder à la plateforme.
+              </p>
+              
+              <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #52525b;">
+                Vous pourrez ensuite vous connecter avec le mail suivant <strong>${data.email}</strong> et le mot de passe que vous aurez défini.
               </p>
               
               <!-- CTA Button -->

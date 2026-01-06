@@ -30,12 +30,19 @@ type Projet = {
   nom: string
 }
 
+type Equipe = {
+  id: string
+  nom: string
+  couleur: string
+}
+
 interface InviteUserDialogProps {
   projets?: Projet[]
+  equipes?: Equipe[]
   trigger?: React.ReactNode
 }
 
-export function InviteUserDialog({ projets = [], trigger }: InviteUserDialogProps) {
+export function InviteUserDialog({ projets = [], equipes = [], trigger }: InviteUserDialogProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -151,6 +158,34 @@ export function InviteUserDialog({ projets = [], trigger }: InviteUserDialogProp
               </SelectContent>
             </Select>
           </div>
+
+          {equipes.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="equipeId">Équipe (optionnel)</Label>
+              <Select name="equipeId" defaultValue="__none__">
+                <SelectTrigger>
+                  <SelectValue placeholder="Aucune équipe spécifique" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Aucune équipe spécifique</SelectItem>
+                  {equipes.map((equipe) => (
+                    <SelectItem key={equipe.id} value={equipe.id}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: equipe.couleur }}
+                        />
+                        {equipe.nom}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                L&apos;utilisateur sera automatiquement ajouté à cette équipe
+              </p>
+            </div>
+          )}
 
           {projets.length > 0 && (
             <div className="space-y-2">
