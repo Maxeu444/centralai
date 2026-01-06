@@ -1,0 +1,20 @@
+// Export des composants et hooks de permission
+export {
+  Can,
+  CanCreateSupport,
+  CanValidateSupport,
+  CanRequestValidation,
+  CanManageProjectMembers,
+  CanInviteUsers,
+  CanManageUsers,
+  CanManageTeams,
+  CanAssignRoles,
+  AdminOnly,
+  ManagerOrAbove,
+  PermissionProvider,
+  usePermissions,
+  useHasPermission,
+  useIsRole,
+  useIsProjectMember,
+  type UserPermissionContext,
+} from './Can'

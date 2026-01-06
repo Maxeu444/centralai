@@ -1,7 +1,9 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { LogoUpload } from '@/features/parametres'
+import { AdminOnly } from '@/components/auth'
 
 export default async function ParametresPage() {
   const session = await auth()
@@ -25,6 +27,7 @@ export default async function ParametresPage() {
         id: true,
         nom: true,
         slug: true,
+        logoUrl: true,
         createdAt: true,
         _count: {
           select: {
@@ -80,6 +83,16 @@ export default async function ParametresPage() {
             <CardTitle>Entreprise</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <AdminOnly>
+              <div>
+                <label className="text-sm font-medium text-gray-500 mb-3 block">Logo</label>
+                <LogoUpload 
+                  currentLogoUrl={entreprise.logoUrl} 
+                  entrepriseNom={entreprise.nom}
+                />
+              </div>
+              <Separator />
+            </AdminOnly>
             <div>
               <label className="text-sm font-medium text-gray-500">Nom</label>
               <p className="text-gray-900">{entreprise.nom}</p>

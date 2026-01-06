@@ -149,9 +149,17 @@ export function RegisterForm() {
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button 
+          type="submit" 
+          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 h-11 text-base" 
+          disabled={isLoading}
+        >
           {isLoading ? 'Création...' : 'Créer mon compte'}
         </Button>
+        
+        <p className="text-xs text-gray-500 text-center mt-4">
+          En créant un compte, vous acceptez nos conditions d&apos;utilisation et notre politique de confidentialité.
+        </p>
       </form>
     </Form>
   )

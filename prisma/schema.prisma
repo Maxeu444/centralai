@@ -43,6 +43,8 @@ enum TypeAction {
   COMMENTAIRE
   INVITATION_ENVOYEE
   INVITATION_ACCEPTEE
+  MEMBRE_AJOUTE
+  COMPTE_ACTIVE
 }
 
 enum StatutInvitation {
@@ -60,11 +62,13 @@ model Entreprise {
   id        String   @id @default(cuid())
   nom       String
   slug      String   @unique
+  logoUrl   String?  // URL du logo de l'entreprise
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   users             User[]
+  equipes           Equipe[]
   projets           Projet[]
   invitations       Invitation[]
   historiqueActions HistoriqueAction[]
@@ -98,9 +102,49 @@ model User {
   commentaires        Commentaire[]
   historiqueActions   HistoriqueAction[]
   invitationsEnvoyees Invitation[]       @relation("InvitationEnvoyeur")
+  membresEquipe       MembreEquipe[]
 
   @@index([entrepriseId])
   @@map("users")
+}
+
+// ============================================================================
+// EQUIPE
+// ============================================================================
+
+model Equipe {
+  id          String   @id @default(cuid())
+  nom         String
+  description String?  @db.Text
+  couleur     String   @default("#6366f1") // Couleur pour l'affichage
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Tenant
+  entrepriseId String
+  entreprise   Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+
+  // Relations
+  membres MembreEquipe[]
+
+  @@unique([entrepriseId, nom])
+  @@index([entrepriseId])
+  @@map("equipes")
+}
+
+model MembreEquipe {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  equipeId String
+  equipe   Equipe @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, equipeId])
+  @@index([equipeId])
+  @@map("membres_equipes")
 }
 
 // ============================================================================
