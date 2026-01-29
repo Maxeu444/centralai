@@ -6,9 +6,13 @@ import {
   createSupportSchema,
   updateSupportSchema,
   changeStatutSchema,
+  createSuggestionSchema,
+  moderateSuggestionSchema,
   type CreateSupportInput,
   type UpdateSupportInput,
   type ChangeStatutInput,
+  type CreateSuggestionInput,
+  type ModerateSuggestionInput,
 } from './schemas'
 import { revalidatePath } from 'next/cache'
 import type { Prisma } from '@prisma/client'
@@ -226,5 +230,169 @@ export async function changeStatut(
   } catch (error) {
     console.error('Erreur changement statut:', error)
     return { success: false, error: 'Erreur lors du changement de statut' }
+  }
+}
+
+// =============================================================================
+// MISE À JOUR DU CONTENU (directe ou via suggestion)
+// =============================================================================
+
+export async function updateSupportContenu(
+  supportId: string,
+  data: { contenu?: string | null; descriptionPost?: string | null; texteStory?: string | null }
+): Promise<ActionResult> {
+  try {
+    const { user, support, roleProjet } = await canAccessSupport(supportId)
+
+    // Tous les membres du projet peuvent modifier le contenu
+    // (soit directement si autorisé, soit via suggestion)
+    const supportFull = await prisma.support.findUnique({
+      where: { id: supportId },
+      select: { createurId: true, statut: true },
+    })
+
+    // Le créateur ou un manager+ peut modifier directement
+    const canEditDirectly = supportFull?.createurId === user.id || hasProjectPermission(roleProjet, 'MANAGER')
+
+    if (!canEditDirectly) {
+      return { success: false, error: 'Utilisez une suggestion de modification' }
+    }
+
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.support.update({
+        where: { id: supportId },
+        data: {
+          contenu: data.contenu,
+          descriptionPost: data.descriptionPost,
+          texteStory: data.texteStory,
+        },
+      })
+
+      await tx.historiqueAction.create({
+        data: {
+          type: 'MODIFICATION',
+          description: 'Modification du contenu du support',
+          entrepriseId: user.entrepriseId,
+          userId: user.id,
+          supportId,
+          projetId: support.projetId,
+        },
+      })
+    })
+
+    revalidatePath(`/dashboard/supports/${supportId}`)
+    return { success: true }
+  } catch (error) {
+    console.error('Erreur modification contenu:', error)
+    return { success: false, error: 'Erreur lors de la modification du contenu' }
+  }
+}
+
+// =============================================================================
+// SUGGESTIONS DE CONTENU
+// =============================================================================
+
+export async function createSuggestion(data: CreateSuggestionInput): Promise<ActionResult<{ id: string }>> {
+  try {
+    const { user, support } = await canAccessSupport(data.supportId)
+    const validated = createSuggestionSchema.parse(data)
+
+    const suggestion = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const newSuggestion = await tx.suggestionContenu.create({
+        data: {
+          champCible: validated.champCible,
+          contenuSuggere: validated.contenuSuggere,
+          commentaire: validated.commentaire,
+          supportId: validated.supportId,
+          auteurId: user.id,
+        },
+      })
+
+      await tx.historiqueAction.create({
+        data: {
+          type: 'MODIFICATION',
+          description: `Suggestion de modification pour "${validated.champCible}"`,
+          entrepriseId: user.entrepriseId,
+          userId: user.id,
+          supportId: validated.supportId,
+          projetId: support.projetId,
+        },
+      })
+
+      return newSuggestion
+    })
+
+    revalidatePath(`/dashboard/supports/${data.supportId}`)
+    return { success: true, data: { id: suggestion.id } }
+  } catch (error) {
+    console.error('Erreur création suggestion:', error)
+    return { success: false, error: 'Erreur lors de la création de la suggestion' }
+  }
+}
+
+export async function moderateSuggestion(data: ModerateSuggestionInput): Promise<ActionResult> {
+  try {
+    const validated = moderateSuggestionSchema.parse(data)
+
+    const suggestion = await prisma.suggestionContenu.findUnique({
+      where: { id: validated.suggestionId },
+      include: {
+        support: { select: { id: true, projetId: true, entrepriseId: true } },
+      },
+    })
+
+    if (!suggestion) {
+      return { success: false, error: 'Suggestion non trouvée' }
+    }
+
+    const { user, roleProjet } = await canAccessSupport(suggestion.supportId)
+
+    // Seul le créateur du support ou un manager+ peut modérer
+    const supportFull = await prisma.support.findUnique({
+      where: { id: suggestion.supportId },
+      select: { createurId: true },
+    })
+
+    if (supportFull?.createurId !== user.id && !hasProjectPermission(roleProjet, 'MANAGER')) {
+      return { success: false, error: 'Permission refusée' }
+    }
+
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (validated.action === 'ACCEPTER') {
+        // Appliquer la suggestion au support
+        const updateData: Record<string, string> = {}
+        updateData[suggestion.champCible] = suggestion.contenuSuggere
+
+        await tx.support.update({
+          where: { id: suggestion.supportId },
+          data: updateData,
+        })
+      }
+
+      await tx.suggestionContenu.update({
+        where: { id: validated.suggestionId },
+        data: {
+          statut: validated.action === 'ACCEPTER' ? 'ACCEPTEE' : 'REFUSEE',
+          moderateurId: user.id,
+        },
+      })
+
+      await tx.historiqueAction.create({
+        data: {
+          type: 'MODIFICATION',
+          description: `Suggestion ${validated.action === 'ACCEPTER' ? 'acceptée' : 'refusée'}`,
+          entrepriseId: suggestion.support.entrepriseId,
+          userId: user.id,
+          supportId: suggestion.supportId,
+          projetId: suggestion.support.projetId,
+        },
+      })
+    })
+
+    revalidatePath(`/dashboard/supports/${suggestion.supportId}`)
+    return { success: true }
+  } catch (error) {
+    console.error('Erreur modération suggestion:', error)
+    return { success: false, error: 'Erreur lors de la modération' }
   }
 }

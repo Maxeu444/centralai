@@ -103,6 +103,8 @@ export async function inviteUser(formData: FormData): Promise<ActionResult> {
       }
     }
 
+    console.log(validated.equipeId);
+
     // Vérifier l'équipe si spécifiée
     if (validated.equipeId) {
       const equipe = await prisma.equipe.findUnique({

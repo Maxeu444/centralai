@@ -3,9 +3,20 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
-import { writeFile, mkdir, unlink } from 'fs/promises'
+import { writeFile, mkdir, unlink, access } from 'fs/promises'
 import { join } from 'path'
-import { existsSync } from 'fs'
+
+/**
+ * Vérifie si un fichier ou dossier existe (version async)
+ */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
 
 // =============================================================================
 // TYPES
@@ -61,7 +72,7 @@ export async function uploadEntrepriseLogo(formData: FormData): Promise<ActionRe
     // Supprimer l'ancien logo s'il existe
     if (entreprise.logoUrl) {
       const oldLogoPath = join(process.cwd(), 'public', entreprise.logoUrl)
-      if (existsSync(oldLogoPath)) {
+      if (await fileExists(oldLogoPath)) {
         try {
           await unlink(oldLogoPath)
         } catch {
@@ -70,11 +81,9 @@ export async function uploadEntrepriseLogo(formData: FormData): Promise<ActionRe
       }
     }
 
-    // Créer le dossier pour les logos si nécessaire
+    // Créer le dossier pour les logos si nécessaire (mkdir recursive crée si nécessaire)
     const logosDir = join(process.cwd(), 'public', 'logos')
-    if (!existsSync(logosDir)) {
-      await mkdir(logosDir, { recursive: true })
-    }
+    await mkdir(logosDir, { recursive: true })
 
     // Générer un nom de fichier unique
     const ext = file.name.split('.').pop() || 'png'
@@ -133,7 +142,7 @@ export async function deleteEntrepriseLogo(): Promise<ActionResult> {
 
     // Supprimer le fichier
     const logoPath = join(process.cwd(), 'public', entreprise.logoUrl)
-    if (existsSync(logoPath)) {
+    if (await fileExists(logoPath)) {
       await unlink(logoPath)
     }
 

@@ -1,5 +1,8 @@
 export { CreateSupportDialog } from './components/create-support-dialog'
 export { SupportCard } from './components/support-card'
 export { StatutActions } from './components/statut-actions'
+export { ContenuEditor } from './components/contenu-editor'
+export { CreateSuggestionDialog } from './components/create-suggestion-dialog'
+export { SuggestionsList } from './components/suggestions-list'
 export * from './actions'
 export * from './schemas'

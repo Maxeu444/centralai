@@ -96,13 +96,15 @@ model User {
   entreprise   Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
 
   // Relations
-  membresProjet       MembreProjet[]
-  supportsCreated     Support[]          @relation("SupportCreateur")
-  fichiers            Fichier[]
-  commentaires        Commentaire[]
-  historiqueActions   HistoriqueAction[]
-  invitationsEnvoyees Invitation[]       @relation("InvitationEnvoyeur")
-  membresEquipe       MembreEquipe[]
+  membresProjet            MembreProjet[]
+  supportsCreated          Support[]             @relation("SupportCreateur")
+  fichiers                 Fichier[]
+  commentaires             Commentaire[]
+  historiqueActions        HistoriqueAction[]
+  invitationsEnvoyees      Invitation[]          @relation("InvitationEnvoyeur")
+  membresEquipe            MembreEquipe[]
+  suggestionsCreees        SuggestionContenu[]   @relation("SuggestionAuteur")
+  suggestionsModerees      SuggestionContenu[]   @relation("SuggestionModerateur")
 
   @@index([entrepriseId])
   @@map("users")
@@ -202,10 +204,15 @@ model Support {
   id          String        @id @default(cuid())
   nom         String
   description String?       @db.Text
+  contenu     String?       @db.Text // Contenu texte du support (éditable)
   statut      StatutSupport @default(BROUILLON)
   type        TypeSupport   @default(AUTRE)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  // Champs spécifiques pour les réseaux sociaux (type SOCIAL)
+  descriptionPost String?   @db.Text // Description/caption du post
+  texteStory      String?   @db.Text // Texte pour story (optionnel)
 
   // Tenant (dénormalisé pour queries rapides)
   entrepriseId String
@@ -217,8 +224,9 @@ model Support {
   createurId String
   createur   User   @relation("SupportCreateur", fields: [createurId], references: [id])
 
-  fichiers     Fichier[]
-  commentaires Commentaire[]
+  fichiers            Fichier[]
+  commentaires        Commentaire[]
+  suggestionsContenu  SuggestionContenu[]
 
   @@index([projetId])
   @@index([entrepriseId])
@@ -249,6 +257,41 @@ model Fichier {
 
   @@index([supportId])
   @@map("fichiers")
+}
+
+// ============================================================================
+// SUGGESTION DE CONTENU
+// ============================================================================
+
+enum StatutSuggestion {
+  EN_ATTENTE
+  ACCEPTEE
+  REFUSEE
+}
+
+model SuggestionContenu {
+  id              String           @id @default(cuid())
+  champCible      String           // 'contenu', 'descriptionPost', 'texteStory'
+  contenuSuggere  String           @db.Text
+  commentaire     String?          @db.Text // Explication de la suggestion
+  statut          StatutSuggestion @default(EN_ATTENTE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  supportId String
+  support   Support @relation(fields: [supportId], references: [id], onDelete: Cascade)
+
+  auteurId String
+  auteur   User   @relation("SuggestionAuteur", fields: [auteurId], references: [id])
+
+  // Qui a validé/refusé
+  moderateurId String?
+  moderateur   User?   @relation("SuggestionModerateur", fields: [moderateurId], references: [id])
+
+  @@index([supportId])
+  @@index([auteurId])
+  @@map("suggestions_contenu")
 }
 
 // ============================================================================

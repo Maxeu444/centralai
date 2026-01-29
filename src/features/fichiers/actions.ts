@@ -5,7 +5,6 @@ import { canAccessSupport } from '@/lib/auth-utils'
 import { revalidatePath } from 'next/cache'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import { existsSync } from 'fs'
 import type { Prisma } from '@prisma/client'
 
 export type ActionResult<T = void> = {
@@ -15,17 +14,24 @@ export type ActionResult<T = void> = {
 }
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
-const MAX_FILE_SIZE = (Number(process.env.MAX_FILE_SIZE_MB) || 50) * 1024 * 1024
+const MAX_FILE_SIZE = (Number(process.env.MAX_FILE_SIZE_MB) || 100) * 1024 * 1024 // 100MB par défaut pour vidéos
 
 const ALLOWED_TYPES = [
-  'application/pdf',
+  // Images
   'image/png',
   'image/jpeg',
   'image/gif',
   'image/webp',
+  // Documents
+  'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Vidéos
+  'video/mp4',
+  'video/webm',
+  'video/quicktime', // .mov
+  'video/x-msvideo', // .avi
 ]
 
 export async function uploadFichier(
@@ -49,11 +55,9 @@ export async function uploadFichier(
       return { success: false, error: 'Type de fichier non autorisé' }
     }
 
-    // Créer le dossier si nécessaire
+    // Créer le dossier si nécessaire (mkdir recursive crée seulement si besoin)
     const uploadPath = join(UPLOAD_DIR, user.entrepriseId, supportId)
-    if (!existsSync(uploadPath)) {
-      await mkdir(uploadPath, { recursive: true })
-    }
+    await mkdir(uploadPath, { recursive: true })
 
     // Générer un nom unique
     const extension = file.name.split('.').pop() || ''

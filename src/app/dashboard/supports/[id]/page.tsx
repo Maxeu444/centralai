@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
-import { canAccessSupport } from '@/lib/auth-utils'
-import { StatutActions } from '@/features/supports'
+import { canAccessSupport, hasProjectPermission } from '@/lib/auth-utils'
+import { StatutActions, ContenuEditor, SuggestionsList, CreateSuggestionDialog } from '@/features/supports'
 import { CommentairesList, CreateCommentaire } from '@/features/commentaires'
 import { FilesList, UploadFichier } from '@/features/fichiers'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatDate } from '@/lib/utils'
-import { ArrowLeft, FileText, MessageSquare, History } from 'lucide-react'
+import { ArrowLeft, FileText, MessageSquare, History, Type, Play } from 'lucide-react'
+import { SupportContenuClient } from './support-contenu-client'
 
 interface SupportDetailPageProps {
   params: Promise<{ id: string }>
@@ -39,6 +40,13 @@ export default async function SupportDetailPage({ params }: SupportDetailPagePro
             auteur: { select: { id: true, prenom: true, nom: true } },
           },
         },
+        suggestionsContenu: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            auteur: { select: { prenom: true, nom: true } },
+            moderateur: { select: { prenom: true, nom: true } },
+          },
+        },
       },
     })
 
@@ -57,6 +65,8 @@ export default async function SupportDetailPage({ params }: SupportDetailPagePro
     })
 
     const isCreateur = support.createur.id === user.id
+    const canEditDirectly = isCreateur || hasProjectPermission(roleProjet, 'MANAGER')
+    const canModerate = canEditDirectly
     const latestFile = support.fichiers[0]
 
     return (
@@ -87,7 +97,7 @@ export default async function SupportDetailPage({ params }: SupportDetailPagePro
 
         {/* Main content */}
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left: Preview & Files */}
+          {/* Left: Preview & Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Preview */}
             <Card>
@@ -112,6 +122,15 @@ export default async function SupportDetailPage({ params }: SupportDetailPagePro
                         className="w-full h-96"
                         title={latestFile.nomOriginal}
                       />
+                    ) : latestFile.mimeType.startsWith('video/') ? (
+                      <video
+                        src={`/api/fichiers/${latestFile.id}`}
+                        controls
+                        className="max-h-96 mx-auto"
+                      >
+                        <track kind="captions" />
+                        Votre navigateur ne supporte pas la lecture vidéo.
+                      </video>
                     ) : (
                       <div className="py-12">
                         <FileText className="mx-auto h-16 w-16 text-gray-400" />
@@ -145,6 +164,24 @@ export default async function SupportDetailPage({ params }: SupportDetailPagePro
                 </CardContent>
               </Card>
             )}
+
+            {/* Contenu textuel */}
+            <SupportContenuClient
+              supportId={support.id}
+              type={support.type}
+              initialContenu={{
+                contenu: support.contenu,
+                descriptionPost: support.descriptionPost,
+                texteStory: support.texteStory,
+              }}
+              canEditDirectly={canEditDirectly}
+            />
+
+            {/* Suggestions */}
+            <SuggestionsList
+              suggestions={support.suggestionsContenu}
+              canModerate={canModerate}
+            />
           </div>
 
           {/* Right: Tabs */}
